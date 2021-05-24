@@ -1,2 +1,4 @@
 node_modules
 .env
+cards
+rotated_cards
