@@ -4,38 +4,49 @@ const app = express();
 const { WebClient } = require('@slack/web-api');
 const {question_template} = require('./templates')
 const bodyParser = require('body-parser');
-const { createMessageAdapter } = require('@slack/interactive-messages');
-const slackInteractions = createMessageAdapter('8972d8dea5ed17e38b06a5624626f0ca');
 
 app.use(cors())
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+require('dotenv').config()
 
-// An access token (from your Slack app or custom integration - xoxp, xoxb)
-const token = 'xoxb-2086449846178-2091065387445-IUpsAtZAaswYgjX7pGwjWzM9';
-
+const token = process.env.SLACK_TOKEN;
 const web = new WebClient(token);
 
 
-(async () => {
-  // See: https://api.slack.com/methods/chat.postMessage
-  const res = await web.chat.postMessage({ channel: '#creating-chat-bots', text: 'wow', blocks: question_template.blocks });
-
-  // `res` contains information about the posted message
-  console.log('Message sent: ', res.ts);
-})();
-
-
-
-slackInteractions.action('submit_question', (payload, respond) => {
-    console.log(payload)
+app.post('/slack/actions', (req, res) => {
+  const body = JSON.parse(req?.body?.payload)
+  switch(body.actions[0].action_id) {
+    case 'submit_question': {
+      console.log({data:body.actions[0].action_id, value: body.state.values['typed_question']['typed_question'].value})
+      break;
+    }
+    case 'end_game': {
+      console.log({data:body.actions[0].action_id})
+      break;
+    }
+    case 'rotate_image': {
+      console.log({data:body.actions[0].action_id})
+    }
+  }
+  res.status(200).send()
 })
- 
-slackInteractions.start(3002).then(() => {
-    // Listening on path '/slack/actions' by default
-console.log(`server listening on port ${3002}`);
-});
-app.listen(3001, () =>
-  console.log('Example app listening on port 3001'),
+
+app.post('/commands', async (req, res) => {
+  const body = req.body;
+  const currentUserId = body.user_id;
+  const _user = body.text.replace('@', '')
+  const users = await web.users.list({token});
+  res.status(200).send()
+  if(users.ok) {
+    const argumentUser = users.members.find(user => user.name === _user).id
+    const conversationRes = await web.conversations.open({users: `${currentUserId}, ${argumentUser}`, token, return_im: true})
+    await web.chat.postMessage({ channel: conversationRes.channel.id, text: 'Start', blocks: question_template.blocks });
+  }
+})
+
+
+app.listen(8001, () =>
+  console.log('Example app listening on port 8001'),
 );

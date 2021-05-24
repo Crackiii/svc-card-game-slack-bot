@@ -1,4 +1,5 @@
 const question_template = {
+	
 	"blocks": [
 		{
 			"type": "image",
@@ -33,6 +34,7 @@ const question_template = {
 			"type": "divider"
 		},
 		{
+			"block_id": 'typed_question',
 			"type": "input",
 			"element": {
 				"type": "plain_text_input",
