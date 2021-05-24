@@ -1,5 +1,4 @@
 const question_template = {
-	
 	"blocks": [
 		{
 			"type": "image",
@@ -99,4 +98,102 @@ const question_template = {
 }
 
 
-module.exports = {question_template}
+const play_next_card_template = {
+	"blocks": [
+		{
+			"type": "section",
+			"text": {
+				"type": "plain_text",
+				"text": "Would you like to play another card?",
+				"emoji": true
+			}
+		},
+		{
+			"type": "actions",
+			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Load another Card",
+						"emoji": true
+					},
+					"value": "click_me_123",
+					"action_id": "load_card"
+				},
+				{
+					"type": "button",
+					"style": "danger",
+					"text": {
+						"type": "plain_text",
+						"text": "End Game!",
+						"emoji": true
+					},
+					"value": "click_me_123",
+					"action_id": "end_game"
+				}
+			]
+		}
+	]
+}
+
+const answer_request_template = {
+	"blocks": [
+		{
+			"type": "input",
+			"element": {
+				"type": "plain_text_input",
+				"action_id": "plain_text_input-action"
+			},
+			"label": {
+				"type": "plain_text",
+				"text": "Type in your answer",
+				"emoji": true
+			}
+		},
+		{
+			"type": "actions",
+			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Submit Answer",
+						"emoji": true
+					},
+					"value": "click_me_123",
+					"action_id": "submit_answer"
+				},
+				{
+					"type": "button",
+					"style": "danger",
+					"text": {
+						"type": "plain_text",
+						"text": "End Game!",
+						"emoji": true
+					},
+					"value": "click_me_123",
+					"action_id": "end_game"
+				}
+			]
+		},
+		{
+			"type": "divider"
+		}
+	]
+}
+
+const game_over_template = {
+	"blocks": [
+		{
+			"type": "section",
+			"text": {
+				"type": "plain_text",
+				"text": "Game has been ended, thank you both for your time :smile:",
+				"emoji": true
+			}
+		}
+	]
+}
+
+module.exports = {question_template, play_next_card_template, answer_request_template, game_over_template}
