@@ -27,10 +27,12 @@ const GAME_CACHE = {
   CURRENT_CHANNEL: '',
   ALL_CARDS: [],
   CURRENT_IMAGE_URL: '',
+  CURRENT_ROTATED_URL: '',
   ROTATED_CARDS: [],
   PLAYER_1_ANSWERED_CARD: '',
   PLAYER_2_ANSWERED_CARD: '',
-  SESSION_DATA: []
+  SESSION_DATA: [],
+  IS_ROTATED: false
 }
 
 
@@ -171,7 +173,9 @@ const uploadCard = async (image) => {
   const pubSecret = parsedPermalink[parsedPermalink.length - 1];
   const url = sharedPublicURLRes.file.url_private+`?pub_secret=${pubSecret}`
 
-  GAME_CACHE.CURRENT_IMAGE_URL = url
+  
+  if(image)  GAME_CACHE.CURRENT_ROTATED_URL = url 
+  else GAME_CACHE.CURRENT_IMAGE_URL = url
   
   return url
 }
@@ -256,8 +260,13 @@ app.post('/slack/actions', async (req, res) => {
       break;
     }
     case 'rotate_image': {
+      GAME_CACHE.IS_ROTATED = !GAME_CACHE.IS_ROTATED
       await deleteMessage()
-      const imageUrl = await uploadCard(true)
+      let imageUrl = null;
+      if (!GAME_CACHE.CURRENT_ROTATED_URL.length) {
+        imageUrl = await uploadCard(true)
+      }
+      imageUrl = GAME_CACHE.IS_ROTATED ? GAME_CACHE.CURRENT_ROTATED_URL : GAME_CACHE.CURRENT_IMAGE_URL
       await loadQuestionUI(imageUrl)
       break;
     }
