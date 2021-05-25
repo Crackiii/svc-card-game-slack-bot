@@ -32,7 +32,9 @@ const GAME_CACHE = {
   PLAYER_1_ANSWERED_CARD: '',
   PLAYER_2_ANSWERED_CARD: '',
   SESSION_DATA: [],
-  IS_ROTATED: false
+  IS_ROTATED: false,
+  CURRENT_IMAGE_URL_USED: '',
+  PLAYERS_DATA: []
 }
 
 
@@ -62,13 +64,31 @@ const setAllRotatedCards = () => {
   fs.readdirSync('./rotated_cards/').forEach(file => GAME_CACHE.ROTATED_CARDS.push(file));
 }
 
+//Flush the Game Cache
+const flushGameUrlCache = () => {
+  GAME_CACHE.CURRENT_IMAGE_URL = ''
+  GAME_CACHE.CURRENT_ROTATED_URL = ''
+}
+
+//Get the actual users
+const sanitizeParam = (text) => text.split(' ').filter(chunk => /@/gi.test(chunk))
+
+//Filter actual users
+const filterActualUsersIds = async (userNames) => {
+  const usernames = userNames.map(name => name.replace('@', ''))
+  const users = await web.users.list({token});
+  const players = users.members.filter(user => usernames.includes(user?.name))
+  const playerIds = players.map(user => user.id);
+  GAME_CACHE.PLAYERS_DATA = players;
+
+  return playerIds;
+}
+
 //Set the initial two players
 const setTwoPlayers = async (body) => {
+  const userNames = sanitizeParam(body.text);
   const player_1 = body.user_id;
-  const username = body.text.replace('@', '')
-  const users = await web.users.list({token});
-  const player_2 = users.members.find(user => user?.name === username).id
-
+  const [player_2] = await filterActualUsersIds(userNames) 
   GAME_CACHE.PLAYER_1 = player_1;
   GAME_CACHE.CURRENT_USER = player_1;
   GAME_CACHE.PLAYER_2 = player_2
@@ -80,14 +100,26 @@ const setCurrentAnswer = (body) => {
   GAME_CACHE.CURRENT_QUESTION = answer
 }
 
+//Set Current URL in Game Cache
+const setCurrentUrl = (image, url) => {
+  if(image)  {
+    GAME_CACHE.CURRENT_ROTATED_URL = url
+    GAME_CACHE.CURRENT_IMAGE_URL_USED = url
+  } else {
+    GAME_CACHE.CURRENT_IMAGE_URL = url
+    GAME_CACHE.CURRENT_IMAGE_URL_USED = url
+  }
+}
+
 //Set / Update the current session data
 const setSessionData = () => {
   const player = getCurrentPlayer()
-  const {answer, card} = getCurrentSessionData()
+  const {answer, card, cardUrl} = getCurrentSessionData()
   GAME_CACHE.SESSION_DATA.push({
     [player]: {
       answer,
-      card
+      card,
+      cardUrl
     }
   })
 }
@@ -105,8 +137,9 @@ const setPlayersPlayedCards = () => {
 const getCurrentSessionData = () => {
   const answer = GAME_CACHE.CURRENT_QUESTION
   const card = GAME_CACHE.CURRENT_CARD
+  const cardUrl = GAME_CACHE.CURRENT_IMAGE_URL_USED
 
-  return {answer, card}
+  return {answer, card, cardUrl}
 }
 
 //Get the whole session data
@@ -135,6 +168,44 @@ const playersPlayedTheSameCards = () => {
   return GAME_CACHE.PLAYER_1_ANSWERED_CARD === GAME_CACHE.PLAYER_2_ANSWERED_CARD ? true : false
 }
 
+// Check if the file is already uploaded
+const isAlreadyUploaded = async () => {
+  const files = await new Promise((resolve, reject) => {
+    request.post('https://slack.com/api/files.list', {
+      formData: {
+        token: userToken,
+      }
+    }, (err, res) => {
+      if(err) reject(err)
+
+      resolve(res.body)
+    })
+  })
+  return JSON.parse(files).files;
+}
+
+//Create a public URL
+const createPublicUrl = (file) => {
+  const parsedPermalink = file.permalink_public.split('-');
+  const pubSecret = parsedPermalink[parsedPermalink.length - 1];
+  const url = file.url_private+`?pub_secret=${pubSecret}`
+  return url
+}
+
+//Get public URL
+const getPublicUrl = async (file) => {
+  const sharedPublicURLRes = await web.files.sharedPublicURL({
+    file:file.id,
+    token: userToken,
+  }).catch(err => console.log("Error:", err.data.error));
+
+  if(sharedPublicURLRes && sharedPublicURLRes.ok) {
+    return createPublicUrl(sharedPublicURLRes.file)
+  } else {
+    return createPublicUrl(file)
+  }
+}
+
 //Upload card to get the public url to image
 const uploadCard = async (image) => {
 
@@ -144,39 +215,34 @@ const uploadCard = async (image) => {
     img =  GAME_CACHE.ROTATED_CARDS.find(card => pattern.test(card))
   }
   const filename = image ? img : GAME_CACHE.CURRENT_CARD;
-  const file = image ? `${__dirname}/rotated_cards/${img}` : `${__dirname}/cards/${GAME_CACHE.CURRENT_CARD}`
+  const searchResults = await isAlreadyUploaded()
+  let file = searchResults.find(file => file.name === filename)
+  const dir = image ? `${__dirname}/rotated_cards/${img}` : `${__dirname}/cards/${GAME_CACHE.CURRENT_CARD}`
 
-  const body = await new Promise((resolve, reject) => 
-    request.post({
-      url: 'https://slack.com/api/files.upload',
-      formData: {
-          token: userToken,
-          title: "Image",
-          filename,
-          filetype: "auto",
-          file: fs.createReadStream(file)
-      },
-    }, (err, res) => {
-      if(err) {
-        reject(err)
-        return
-      }
-      resolve(JSON.parse(res.body))
-  }))
+  if(!file) { 
+    file = await new Promise((resolve, reject) => 
+      request.post({
+        url: 'https://slack.com/api/files.upload',
+        formData: {
+            token: userToken,
+            title: "Image",
+            filename,
+            filetype: "auto",
+            file: fs.createReadStream(dir)
+        },
+      }, (err, res) => {
+        if(err) {
+          reject(err)
+          return
+        }
+        resolve(JSON.parse(res.body))
+    }))
+  }
 
-  const sharedPublicURLRes = await web.files.sharedPublicURL({
-    file: body.file.id,
-    token: userToken,
-  });
-
-  const parsedPermalink = sharedPublicURLRes.file.permalink_public.split('-');
-  const pubSecret = parsedPermalink[parsedPermalink.length - 1];
-  const url = sharedPublicURLRes.file.url_private+`?pub_secret=${pubSecret}`
-
+  console.log("====>", file)
   
-  if(image)  GAME_CACHE.CURRENT_ROTATED_URL = url 
-  else GAME_CACHE.CURRENT_IMAGE_URL = url
-  
+  const url = await getPublicUrl(file)
+  setCurrentUrl(image, url)  
   return url
 }
 
@@ -244,6 +310,7 @@ app.post('/slack/actions', async (req, res) => {
       break;
     }
     case 'load_card': {
+      flushGameUrlCache()
       getRandomCard()
       const imageUrl = await uploadCard(false)
       await deleteMessage()
@@ -274,6 +341,7 @@ app.post('/slack/actions', async (req, res) => {
 })
 
 app.post('/commands', async (req, res) => {
+
   res.status(200).send('Starting game, please wait...')
   setAllCards()
   setAllRotatedCards()
