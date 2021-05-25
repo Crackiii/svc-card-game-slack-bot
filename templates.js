@@ -1,3 +1,48 @@
+const start_game_template = {
+	"blocks": [
+		{
+			"type": "actions",
+			"elements": [
+				{
+					"style": "primary",
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Start Game",
+						"emoji": true
+					},
+					"value": "click_me_123",
+					"action_id": "start_game"
+				},
+				{
+					"style": "danger",
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Cancel",
+						"emoji": true
+					},
+					"value": "click_me_123",
+					"action_id": "cancel_start"
+				}
+			]
+		}
+	]
+}
+
+const laoding_card_template = {
+	"blocks": [
+		{
+			"type": "section",
+			"text": {
+				"type": "plain_text",
+				"text": "Loading card please wait :simple_smile:",
+				"emoji": true
+			}
+		}
+	]
+}
+
 const question_template = {
 	"blocks": [
 		{
@@ -21,7 +66,7 @@ const question_template = {
 					"style": "primary",
 					"text": {
 						"type": "plain_text",
-						"text": "Rotate Image",
+						"text": "Chosse option 2 question",
 						"emoji": true
 					},
 					"value": "click_me_123",
@@ -196,4 +241,4 @@ const game_over_template = {
 	]
 }
 
-module.exports = {question_template, play_next_card_template, answer_request_template, game_over_template}
+module.exports = { laoding_card_template, start_game_template, question_template, play_next_card_template, answer_request_template, game_over_template }

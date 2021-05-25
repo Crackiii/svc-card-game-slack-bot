@@ -2,11 +2,11 @@ const express = require('express')
 const cors = require('cors')
 const app = express();
 const { WebClient } = require('@slack/web-api');
-const {question_template, answer_request_template, play_next_card_template, game_over_template} = require('./templates')
+const { question_template, play_next_card_template, game_over_template, start_game_template, laoding_card_template } = require('./templates')
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const request = require('request')
-const jimp = require('jimp');
+const Jimp = require('jimp');
 require('dotenv').config()
 app.use(cors())
 app.use(bodyParser.json());
@@ -36,26 +36,24 @@ const GAME_CACHE = {
 }
 
 
-// var dir = './rotated_cards';
-// if (!fs.existsSync(dir)){
-//     fs.mkdirSync(dir);
-// }
-// const rotateCards = async (done) => {
-//   GAME_CACHE.ALL_CARDS.forEach(async (card) => {
-//     jimp.read(`${__dirname}/cards/${card}`).then(image => {
-//       image.rotate(180).write(`${__dirname}/${dir}/rotated_${card}`)
-//     })
-//   })
-//   done()
-// }
-// rotateCards(() => {
-// })
-
+const rotateImage = async (card) => {
+  const image = await Jimp.read(`./cards/${card}`);
+  await image.rotate(180).writeAsync(`./rotated_cards/rotated_${card}`).catch(error => '');
+}
 
 //Set all straight cards to game cache
 const setAllCards = () => {
   fs.readdirSync('./cards/').forEach(file => GAME_CACHE.ALL_CARDS.push(file));
 }
+// setAllCards()
+const rotateCards = async () => {
+  GAME_CACHE.ALL_CARDS.forEach(async (card) => {
+    await rotateImage(card)
+  })
+}
+// rotateCards()
+
+
 
 //Set all rotated cards to game cache
 const setAllRotatedCards = () => {
@@ -63,15 +61,22 @@ const setAllRotatedCards = () => {
 }
 
 //Set the initial two players
-const setTwoPlayers = async (body) => {
+const setPlayers = async (body) => {
   const player_1 = body.user_id;
   const username = body.text.replace('@', '')
-  const users = await web.users.list({token});
+  const users = await web.users.list({ token });
   const player_2 = users.members.find(user => user?.name === username).id
 
   GAME_CACHE.PLAYER_1 = player_1;
   GAME_CACHE.CURRENT_USER = player_1;
   GAME_CACHE.PLAYER_2 = player_2
+
+  return { player_1, player_2 }
+}
+
+//Set channel
+const setChannel = (id) => {
+  GAME_CACHE.CURRENT_CHANNEL = id
 }
 
 //Set the current answer by the current user
@@ -80,10 +85,15 @@ const setCurrentAnswer = (body) => {
   GAME_CACHE.CURRENT_QUESTION = answer
 }
 
+//Set current user
+const setCurrentUser = (id) => {
+  GAME_CACHE.CURRENT_USER = id
+}
+
 //Set / Update the current session data
 const setSessionData = () => {
   const player = getCurrentPlayer()
-  const {answer, card} = getCurrentSessionData()
+  const { answer, card } = getCurrentSessionData()
   GAME_CACHE.SESSION_DATA.push({
     [player]: {
       answer,
@@ -94,7 +104,7 @@ const setSessionData = () => {
 
 //Set player's played cards
 const setPlayersPlayedCards = () => {
-  if(GAME_CACHE.CURRENT_USER === GAME_CACHE.PLAYER_1) {
+  if (GAME_CACHE.CURRENT_USER === GAME_CACHE.PLAYER_1) {
     GAME_CACHE.PLAYER_1_ANSWERED_CARD = GAME_CACHE.CURRENT_CARD
   } else {
     GAME_CACHE.PLAYER_2_ANSWERED_CARD = GAME_CACHE.CURRENT_CARD
@@ -106,7 +116,7 @@ const getCurrentSessionData = () => {
   const answer = GAME_CACHE.CURRENT_QUESTION
   const card = GAME_CACHE.CURRENT_CARD
 
-  return {answer, card}
+  return { answer, card }
 }
 
 //Get the whole session data
@@ -114,12 +124,12 @@ const getSessionData = () => GAME_CACHE.SESSION_DATA
 
 //Delete the current message posted
 const deleteMessage = async () => {
-  await web.chat.delete({token, ts: GAME_CACHE.CURRENT_MESSAGE, channel: GAME_CACHE.CURRENT_CHANNEL})
+  await web.chat.delete({ token, ts: GAME_CACHE.CURRENT_MESSAGE, channel: GAME_CACHE.CURRENT_CHANNEL })
 }
 
 //Create a conversation between users
 const createConversation = async (users) => {
-  return await web.conversations.open({users,token, return_im: true})
+  return await web.conversations.open({ users, token, return_im: true })
 }
 
 //Get next player in the game
@@ -139,30 +149,30 @@ const playersPlayedTheSameCards = () => {
 const uploadCard = async (image) => {
 
   let img = null;
-  if(image) {
+  if (image) {
     const pattern = new RegExp(`${GAME_CACHE.CURRENT_CARD}`, 'gi')
-    img =  GAME_CACHE.ROTATED_CARDS.find(card => pattern.test(card))
+    img = GAME_CACHE.ROTATED_CARDS.find(card => pattern.test(card))
   }
   const filename = image ? img : GAME_CACHE.CURRENT_CARD;
   const file = image ? `${__dirname}/rotated_cards/${img}` : `${__dirname}/cards/${GAME_CACHE.CURRENT_CARD}`
-
-  const body = await new Promise((resolve, reject) => 
+  console.log({ image, img, file })
+  const body = await new Promise((resolve, reject) =>
     request.post({
       url: 'https://slack.com/api/files.upload',
       formData: {
-          token: userToken,
-          title: "Image",
-          filename,
-          filetype: "auto",
-          file: fs.createReadStream(file)
+        token: userToken,
+        title: "Image",
+        filename,
+        filetype: "auto",
+        file: fs.createReadStream(file)
       },
     }, (err, res) => {
-      if(err) {
+      if (err) {
         reject(err)
         return
       }
       resolve(JSON.parse(res.body))
-  }))
+    }))
 
   const sharedPublicURLRes = await web.files.sharedPublicURL({
     file: body.file.id,
@@ -171,18 +181,18 @@ const uploadCard = async (image) => {
 
   const parsedPermalink = sharedPublicURLRes.file.permalink_public.split('-');
   const pubSecret = parsedPermalink[parsedPermalink.length - 1];
-  const url = sharedPublicURLRes.file.url_private+`?pub_secret=${pubSecret}`
+  const url = sharedPublicURLRes.file.url_private + `?pub_secret=${pubSecret}`
 
-  
-  if(image)  GAME_CACHE.CURRENT_ROTATED_URL = url 
+
+  if (image) GAME_CACHE.CURRENT_ROTATED_URL = url
   else GAME_CACHE.CURRENT_IMAGE_URL = url
-  
+
   return url
 }
 
 //Get random card
 const getRandomCard = () => {
-  if(GAME_CACHE.CURRENT_CARD) GAME_CACHE.CARDS_PLAYED.push(GAME_CACHE.CURRENT_CARD);
+  if (GAME_CACHE.CURRENT_CARD) GAME_CACHE.CARDS_PLAYED.push(GAME_CACHE.CURRENT_CARD);
 
   const allCardsNotPlayed = GAME_CACHE.ALL_CARDS.filter(card => !GAME_CACHE.CARDS_PLAYED.includes(card))
   const randomCard = allCardsNotPlayed[Math.floor(Math.random() * allCardsNotPlayed.length)];
@@ -193,18 +203,17 @@ const getRandomCard = () => {
 }
 
 
-
 //Update the current user
 const exchangePlayers = () => {
   setPlayersPlayedCards()
-  GAME_CACHE.CURRENT_USER = 
+  GAME_CACHE.CURRENT_USER =
     GAME_CACHE.CURRENT_USER === GAME_CACHE.PLAYER_1 ? GAME_CACHE.PLAYER_2 : GAME_CACHE.PLAYER_1
 }
 
 //Let the next player answer the question
 const requestNextPlayer = async () => {
   setSessionData()
-  if(playersPlayedTheSameCards()) {
+  if (playersPlayedTheSameCards()) {
     await loadNextCardUI()
     return
   }
@@ -212,30 +221,42 @@ const requestNextPlayer = async () => {
   await loadQuestionUI()
 }
 
+//Load Start game UI
+const loadStartGameUI = async (id) => {
+  const postMessageRes = await web.chat.postMessage({ channel: id, text: 'Start Game !', blocks: start_game_template.blocks });
+  GAME_CACHE.CURRENT_MESSAGE = postMessageRes.ts
+  GAME_CACHE.CURRENT_CHANNEL = postMessageRes.channel
+}
+
 //Load the question UI to the current user
 const loadQuestionUI = async (imageUrl) => {
   question_template.blocks[0].image_url = imageUrl || GAME_CACHE.CURRENT_IMAGE_URL;
-  const postMessageRes = await web.chat.postMessage({ channel: GAME_CACHE.CURRENT_USER, text: 'Question Asked !', blocks:  question_template.blocks});
+  const postMessageRes = await web.chat.postMessage({ channel: GAME_CACHE.CURRENT_CHANNEL, text: 'Question Asked !', blocks: question_template.blocks });
   GAME_CACHE.CURRENT_MESSAGE = postMessageRes.ts
   GAME_CACHE.CURRENT_CHANNEL = postMessageRes.channel
 }
 
 //Load next card ui to ask if the user want to play more
 const loadNextCardUI = async () => {
-  const postMessageRes = await web.chat.postMessage({ channel: GAME_CACHE.CURRENT_USER, text: 'Next Card ?', blocks:  play_next_card_template.blocks});
+  const postMessageRes = await web.chat.postMessage({ channel: GAME_CACHE.CURRENT_CHANNEL, text: 'Next Card ?', blocks: play_next_card_template.blocks });
   GAME_CACHE.CURRENT_MESSAGE = postMessageRes.ts
   GAME_CACHE.CURRENT_CHANNEL = postMessageRes.channel
 }
 
 //Load the game end ui
 const loadGameEndUI = async (channel) => {
-  await web.chat.postMessage({ channel, text: 'Game Over!', blocks:  game_over_template.blocks});
+  await web.chat.postMessage({ channel, text: 'Game Over!', blocks: game_over_template.blocks });
+}
+
+//Load loading UI
+const loadLoaderUI = async () => {
+  await web.chat.postMessage({ channel: GAME_CACHE.CURRENT_CHANNEL, text: 'Next Card ?', blocks: laoding_card_template.blocks });
 }
 
 app.post('/slack/actions', async (req, res) => {
   const body = JSON.parse(req?.body?.payload)
   res.status(200).send('Loading...')
-  switch(body.actions[0].action_id) {
+  switch (body.actions[0].action_id) {
     case 'submit_question': {
       setCurrentAnswer(body)
       setPlayersPlayedCards()
@@ -253,7 +274,6 @@ app.post('/slack/actions', async (req, res) => {
     case 'end_game': {
       await deleteMessage()
       const sessionData = getSessionData()
-      console.log(sessionData)
       const nextPlayer = getNextPlayer()
       const conversation = await createConversation(`${GAME_CACHE.CURRENT_USER}, ${nextPlayer}`)
       await loadGameEndUI(conversation.channel.id)
@@ -267,7 +287,17 @@ app.post('/slack/actions', async (req, res) => {
         imageUrl = await uploadCard(true)
       }
       imageUrl = GAME_CACHE.IS_ROTATED ? GAME_CACHE.CURRENT_ROTATED_URL : GAME_CACHE.CURRENT_IMAGE_URL
+      console.log("======> Choosen", imageUrl)
       await loadQuestionUI(imageUrl)
+      break;
+    }
+    case 'start_game': {
+      setCurrentUser(body.user.id)
+      await deleteMessage()
+      Promise.all([
+        await loadLoaderUI(),
+        await loadQuestionUI(await uploadCard(false))
+      ])
       break;
     }
   }
@@ -278,8 +308,10 @@ app.post('/commands', async (req, res) => {
   setAllCards()
   setAllRotatedCards()
   getRandomCard()
-  await setTwoPlayers(req.body)
-  await loadQuestionUI(await uploadCard(false))
+  const { player_1, player_2 } = await setPlayers(req.body)
+  const conversation = await createConversation(`${player_1}, ${player_2}`)
+  setChannel(conversation.channel.id)
+  await loadStartGameUI(conversation.channel.id)
 })
 
 app.listen(8001, () =>
