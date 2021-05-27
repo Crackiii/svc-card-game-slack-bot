@@ -66,7 +66,7 @@ const question_template = {
 					"style": "primary",
 					"text": {
 						"type": "plain_text",
-						"text": "Chosse option 2 question",
+						"text": "Choose option 2 question",
 						"emoji": true
 					},
 					"value": "click_me_123",
@@ -87,7 +87,7 @@ const question_template = {
 			},
 			"label": {
 				"type": "plain_text",
-				"text": "Type in the question",
+				"text": "Type in the answer",
 				"emoji": true
 			}
 		},
@@ -160,7 +160,7 @@ const play_next_card_template = {
 					"type": "button",
 					"text": {
 						"type": "plain_text",
-						"text": "Load another Card",
+						"text": "Play next card",
 						"emoji": true
 					},
 					"value": "click_me_123",
@@ -241,4 +241,10 @@ const game_over_template = {
 	]
 }
 
-module.exports = { laoding_card_template, start_game_template, question_template, play_next_card_template, answer_request_template, game_over_template }
+const wait_for_player_template = {
+	"blocks": [
+
+	]
+}
+
+module.exports = { wait_for_player_template, laoding_card_template, start_game_template, question_template, play_next_card_template, answer_request_template, game_over_template }
