@@ -46,38 +46,6 @@ const laoding_card_template = {
 const question_template = {
 	"blocks": [
 		{
-			"type": "image",
-			"title": {
-				"type": "plain_text",
-				"text": "I Need a Marg",
-				"emoji": true
-			},
-			"image_url": "https://assets3.thrillist.com/v1/image/1682388/size/tl-horizontal_main.jpg",
-			"alt_text": "marg"
-		},
-		{
-			"type": "divider"
-		},
-		{
-			"type": "actions",
-			"elements": [
-				{
-					"type": "button",
-					"style": "primary",
-					"text": {
-						"type": "plain_text",
-						"text": "Choose option 2 question",
-						"emoji": true
-					},
-					"value": "click_me_123",
-					"action_id": "rotate_image"
-				}
-			]
-		},
-		{
-			"type": "divider"
-		},
-		{
 			"block_id": 'typed_question',
 			"type": "input",
 			"element": {

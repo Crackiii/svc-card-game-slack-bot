@@ -35,7 +35,8 @@ const GAME_CACHE = {
   SESSION_DATA: [],
   IS_ROTATED: false,
   CURRENT_QUESTION_TS: '',
-  URL_USER_HAS_ANSWERED_FOR: ''
+  URL_USER_HAS_ANSWERED_FOR: '',
+  ANYONE_ANSWERED: false
 }
 
 
@@ -93,6 +94,25 @@ const setCurrentUser = (id) => {
   GAME_CACHE.CURRENT_USER = GAME_CACHE.PLAYER_1.id === id ? GAME_CACHE.PLAYER_1 : GAME_CACHE.PLAYER_2
 }
 
+//Set anyone answered
+const setAnyOneAnswered = (answered) => {
+  GAME_CACHE.ANYONE_ANSWERED = answered
+}
+
+const flushState = () => {
+  GAME_CACHE.CURRENT_USER = ''
+  GAME_CACHE.CURRENT_QUESTION = ''
+  GAME_CACHE.CURRENT_MESSAGE_TS = ''
+  GAME_CACHE.CURRENT_IMAGE_URL = ''
+  GAME_CACHE.CURRENT_ROTATED_URL = ''
+  GAME_CACHE.PLAYER_1_ANSWERED_CARD = ''
+  GAME_CACHE.PLAYER_2_ANSWERED_CARD = ''
+  GAME_CACHE.IS_ROTATED = false
+  GAME_CACHE.CURRENT_QUESTION_TS = ''
+  GAME_CACHE.URL_USER_HAS_ANSWERED_FOR = ''
+  GAME_CACHE.ANYONE_ANSWERED = false
+}
+
 //Set / Update the current session data
 const setSessionData = () => {
   const player = getCurrentPlayer()
@@ -126,8 +146,11 @@ const getCurrentSessionData = () => {
 const getSessionData = () => GAME_CACHE.SESSION_DATA
 
 //Delete the current message posted
-const deleteMessage = async (ts) => {
-  await web.chat.delete({ token, ts: ts || GAME_CACHE.CURRENT_MESSAGE_TS, channel: GAME_CACHE.CURRENT_CHANNEL })
+const deleteMessage = async (timestamp) => {
+  const ts = timestamp || GAME_CACHE.CURRENT_MESSAGE_TS
+  if (ts) {
+    await web.chat.delete({ token, ts, channel: GAME_CACHE.CURRENT_CHANNEL })
+  }
 }
 
 //Create a conversation between users
@@ -159,6 +182,7 @@ const uploadCard = async (image) => {
   }
   const filename = image ? img : GAME_CACHE.CURRENT_CARD;
   const file = image ? `${__dirname}/rotated_cards/${img}` : `${__dirname}/cards/${GAME_CACHE.CURRENT_CARD}`
+
   const body = await new Promise((resolve, reject) =>
     request.post({
       url: 'https://slack.com/api/files.upload',
@@ -195,13 +219,10 @@ const uploadCard = async (image) => {
 
 //Get random card
 const getRandomCard = () => {
-  if (GAME_CACHE.CURRENT_CARD) GAME_CACHE.CARDS_PLAYED.push(GAME_CACHE.CURRENT_CARD);
-
+  if (GAME_CACHE.CURRENT_CARD.length) GAME_CACHE.CARDS_PLAYED.push(GAME_CACHE.CURRENT_CARD);
   const allCardsNotPlayed = GAME_CACHE.ALL_CARDS.filter(card => !GAME_CACHE.CARDS_PLAYED.includes(card))
   const randomCard = allCardsNotPlayed[Math.floor(Math.random() * allCardsNotPlayed.length)];
-
   GAME_CACHE.CURRENT_CARD = randomCard;
-
   return randomCard
 }
 
@@ -221,7 +242,7 @@ const requestNextPlayer = async () => {
     return
   }
   const text = `${GAME_CACHE.CURRENT_USER.real_name} has answered the Question. ${getNextPlayer().real_name} now it is your turn. Please answer the question that was selected by ${GAME_CACHE.CURRENT_USER.real_name}`
-  await loadQuestionUI(GAME_CACHE.IS_ROTATED ? GAME_CACHE.CURRENT_ROTATED_URL : GAME_CACHE.CURRENT_IMAGE_URL, true)
+  await loadQuestionUI(GAME_CACHE.IS_ROTATED ? GAME_CACHE.CURRENT_ROTATED_URL : GAME_CACHE.CURRENT_IMAGE_URL, false)
   await loadWaitForFirstPlayerMessage(text)
 }
 
@@ -233,15 +254,49 @@ const loadStartGameUI = async (id) => {
 }
 
 //Load the question UI to the current user
-const loadQuestionUI = async (imageUrl, removeRotateBlock) => {
+const loadQuestionUI = async (imageUrl, addIamge) => {
   const question_template_copy = Object.assign({}, question_template)
-  if (removeRotateBlock) {
-    // question_template_copy.blocks.slice(1, 2);
+  if (addIamge) {
+    question_template.blocks.unshift({ "type": "divider" })
+    question_template.blocks.unshift({
+      "type": "actions",
+      "elements": [
+        {
+          "type": "button",
+          "style": "primary",
+          "text": {
+            "type": "plain_text",
+            "text": "Choose option 2 question",
+            "emoji": true
+          },
+          "value": "click_me_123",
+          "action_id": "rotate_image"
+        }
+      ]
+    })
+    question_template.blocks.unshift({ "type": "divider" })
+    question_template.blocks.unshift({
+      "type": "image",
+      "title": {
+        "type": "plain_text",
+        "text": "I Need a Marg",
+        "emoji": true
+      },
+      "image_url": "https://assets3.thrillist.com/v1/image/1682388/size/tl-horizontal_main.jpg",
+      "alt_text": "marg"
+    })
+    question_template_copy.blocks[0].image_url = imageUrl || GAME_CACHE.CURRENT_IMAGE_URL;
   }
-  question_template_copy.blocks[0].image_url = imageUrl || GAME_CACHE.CURRENT_IMAGE_URL;
   const postMessageRes = await web.chat.postMessage({ channel: GAME_CACHE.CURRENT_CHANNEL, text: 'Question Asked !', blocks: question_template_copy.blocks });
   GAME_CACHE.CURRENT_QUESTION_TS = postMessageRes.ts
   GAME_CACHE.CURRENT_CHANNEL = postMessageRes.channel
+
+  if (addIamge) {
+    question_template_copy.blocks.shift()
+    question_template_copy.blocks.shift()
+    question_template_copy.blocks.shift()
+    question_template_copy.blocks.shift()
+  }
 }
 
 //Load next card ui to ask if the user want to play more
@@ -268,7 +323,7 @@ const generateCSV = async (sessionData) => {
 
 //const load message 1 ui
 const loadWaitForFirstPlayerMessage = async (text, withImage) => {
-  if (withImage) {
+  if (withImage && !GAME_CACHE.ANYONE_ANSWERED) {
     wait_for_player_template.blocks.push({
       "type": "image",
       "title": {
@@ -297,16 +352,18 @@ app.post('/slack/actions', async (req, res) => {
   res.status(200).send()
   switch (body.actions[0].action_id) {
     case 'submit_question': {
+
       setCurrentUser(body.user.id)
       setCurrentAnswer(body)
       setPlayersPlayedCards(body.user.id)
       await loadWaitForFirstPlayerMessage(`*This is ${GAME_CACHE.CURRENT_USER.real_name}'s answer: ${GAME_CACHE.CURRENT_QUESTION}.*`, true)
       await deleteMessage(GAME_CACHE.CURRENT_QUESTION_TS)
       await requestNextPlayer()
-
+      setAnyOneAnswered(true)
       break;
     }
     case 'end_game': {
+      setAnyOneAnswered(false)
       await deleteMessage()
       const sessionData = getSessionData()
       await loadGameEndUI()
@@ -326,20 +383,24 @@ app.post('/slack/actions', async (req, res) => {
       imageUrl = GAME_CACHE.IS_ROTATED ? GAME_CACHE.CURRENT_ROTATED_URL : GAME_CACHE.CURRENT_IMAGE_URL
       const text = `*${GAME_CACHE.CURRENT_USER.real_name}* please pick one of the two questions options and answer the question first. *${getNextPlayer().real_name}*  please wait until *${GAME_CACHE.CURRENT_USER.real_name}* has answered the question, only then answer yourself.`
       Promise.all([
-        await loadQuestionUI(imageUrl, false),
+        await loadQuestionUI(imageUrl, true),
         await loadWaitForFirstPlayerMessage(text),
       ])
       break;
     }
+    case 'load_card': {
+      flushState()
+    }
     case 'start_game':
     case 'load_card': {
+      setAnyOneAnswered(false)
       setCurrentUser(body.user.id)
       getRandomCard()
       const text = `*${GAME_CACHE.CURRENT_USER.real_name}* please pick one of the two questions options and answer the question first. *${getNextPlayer().real_name}*  please wait until *${GAME_CACHE.CURRENT_USER.real_name}* has answered the question, only then answer yourself.`
       Promise.all([
         await deleteMessage(),
         await loadLoaderUI(),
-        await loadQuestionUI(await uploadCard(false), false),
+        await loadQuestionUI(await uploadCard(false), true),
         await loadWaitForFirstPlayerMessage(text)
       ])
       break;
