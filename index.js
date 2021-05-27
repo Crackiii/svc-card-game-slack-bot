@@ -347,6 +347,8 @@ const loadWaitForFirstPlayerMessage = async (text, withImage) => {
   wait_for_player_template.blocks = []
 }
 
+app.get("/", (req, res) => res.send("Yay!, App is up.... !"))
+
 app.post('/slack/actions', async (req, res) => {
   const body = JSON.parse(req?.body?.payload)
   res.status(200).send()
@@ -419,6 +421,6 @@ app.post('/commands', async (req, res) => {
   await loadStartGameUI(conversation.channel.id)
 })
 
-app.listen(8001, () =>
+app.listen(process.env.PORT || 8001, () =>
   console.log('Example app listening on port 8001'),
 );
