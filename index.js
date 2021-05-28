@@ -232,7 +232,6 @@ const getRandomCard = () => {
 //Upload card to get the public url to image
 const uploadCsv = async (name) => {
 
-  const filename = image ? img : GAME_CACHE.CURRENT_CARD;
   const file = `${__dirname}/csv/${name}.csv`
 
   const body = await new Promise((resolve, reject) =>
@@ -241,7 +240,7 @@ const uploadCsv = async (name) => {
       formData: {
         token: userToken,
         title: "CSV",
-        filename,
+        filename: name,
         filetype: "auto",
         file: fs.createReadStream(file)
       },
@@ -359,7 +358,7 @@ const loadLoaderUI = async () => {
 const generateCSV = async (sessionData) => {
   const csv = new ObjectsToCsv(sessionData)
   const fileName = `data_${Date.now()}`
-  await csv.toDisk(`./${fileName}.csv`)
+  await csv.toDisk(`./csv/${fileName}.csv`)
   await uploadCsv(fileName);
 }
 
