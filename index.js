@@ -7,12 +7,12 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const request = require('request')
 const Jimp = require('jimp');
-const csv = require('csv')
+const ObjectsToCsv = require('objects-to-csv')
 require('dotenv').config()
 app.use(cors())
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
+app.use(express.static(__dirname))
 
 const token = process.env.SLACK_TOKEN;
 const userToken = process.env.SLACK_USER_TOKEN
@@ -115,13 +115,13 @@ const flushState = () => {
 
 //Set / Update the current session data
 const setSessionData = () => {
-  const player = getCurrentPlayer()
-  const { answer, card } = getCurrentSessionData()
+  // const player = getCurrentPlayer()
+  const { answer, card, username, card_url } = getCurrentSessionData()
   GAME_CACHE.SESSION_DATA.push({
-    [player]: {
-      answer,
-      card
-    }
+    answer,
+    card,
+    username,
+    card_url
   })
 }
 
@@ -138,8 +138,10 @@ const setPlayersPlayedCards = (current_player) => {
 const getCurrentSessionData = () => {
   const answer = GAME_CACHE.CURRENT_QUESTION
   const card = GAME_CACHE.CURRENT_CARD
+  const card_url = GAME_CACHE.IS_ROTATED ? GAME_CACHE.CURRENT_ROTATED_URL : GAME_CACHE.CURRENT_IMAGE_URL
+  const username = GAME_CACHE.CURRENT_USER.real_name
 
-  return { answer, card }
+  return { answer, card, card_url, username }
 }
 
 //Get the whole session data
@@ -224,6 +226,44 @@ const getRandomCard = () => {
   const randomCard = allCardsNotPlayed[Math.floor(Math.random() * allCardsNotPlayed.length)];
   GAME_CACHE.CURRENT_CARD = randomCard;
   return randomCard
+}
+
+
+//Upload card to get the public url to image
+const uploadCsv = async (name) => {
+
+  const filename = image ? img : GAME_CACHE.CURRENT_CARD;
+  const file = `${__dirname}/csv/${name}.csv`
+
+  const body = await new Promise((resolve, reject) =>
+    request.post({
+      url: 'https://slack.com/api/files.upload',
+      formData: {
+        token: userToken,
+        title: "CSV",
+        filename,
+        filetype: "auto",
+        file: fs.createReadStream(file)
+      },
+    }, (err, res) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      resolve(JSON.parse(res.body))
+    }))
+
+  const sharedPublicURLRes = await web.files.sharedPublicURL({
+    file: body.file.id,
+    token: userToken,
+  });
+
+  const parsedPermalink = sharedPublicURLRes.file.permalink_public.split('-');
+  const pubSecret = parsedPermalink[parsedPermalink.length - 1];
+  const url = sharedPublicURLRes.file.url_private + `?pub_secret=${pubSecret}`
+
+
+  return url
 }
 
 
@@ -317,8 +357,10 @@ const loadLoaderUI = async () => {
 }
 
 const generateCSV = async (sessionData) => {
-  // await web.channels.history({token, channel: })
-  console.log(sessionData)
+  const csv = new ObjectsToCsv(sessionData)
+  const fileName = `data_${Date.now()}`
+  await csv.toDisk(`./${fileName}.csv`)
+  await uploadCsv(fileName);
 }
 
 //const load message 1 ui
@@ -347,7 +389,17 @@ const loadWaitForFirstPlayerMessage = async (text, withImage) => {
   wait_for_player_template.blocks = []
 }
 
-app.get("/", (req, res) => res.send("Yay!, App is up.... !"))
+app.use('/get-files', express.static(__dirname + '/index.html'));
+
+app.post("/", async (req, res) => {
+  const files = await web.files.list({ token: userToken });
+  if (files.ok) {
+    res.send(files.files.reverse())
+  } else {
+    res.send(files)
+  }
+
+})
 
 app.post('/slack/actions', async (req, res) => {
   const body = JSON.parse(req?.body?.payload)
