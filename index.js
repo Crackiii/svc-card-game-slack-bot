@@ -393,7 +393,7 @@ const loadWaitForFirstPlayerMessage = async (text, withImage) => {
 app.use('/get-files', express.static(__dirname + '/index.html'));
 
 app.post("/", async (req, res) => {
-  const files = await web.files.list({ token: userToken });
+  const files = await web.files.list({ token: userToken, types: 'csv' });
   if (files.ok) {
     res.send(files.files.reverse())
   } else {

@@ -24,6 +24,7 @@
         <th>File</th>
         <th>Size</th>
         <th>Time</th>
+        <th>Date</th>
       </tr>
     </thead>
     <tbody>
@@ -51,7 +52,7 @@
             title: item.title,
             size: item.size,
             id: item.id
-          }))
+          })).filter(file => /csv/gim.test(file.title))
           el.innerHTML = "";
           for (const item of mapped) {
             el.insertAdjacentHTML('beforeend', `
@@ -61,6 +62,7 @@
                 <td>${item.file}</td>  
                 <td>${bytesToSize(item.size)}</td>  
                 <td>${new Date(item.time).toLocaleTimeString()}</td>  
+                <td>${new Date(item.time).toLocaleDateString()}</td>  
               </tr>
             `)
           }
