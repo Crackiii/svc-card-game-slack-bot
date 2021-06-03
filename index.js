@@ -232,10 +232,7 @@ const getRandomCard = () => {
 //Upload card to get the public url to image
 const uploadCsv = async (name) => {
 
-  const allCSVs = []
-  fs.readdirSync(`${__dirname}/csv/`).forEach(file => allCSVs.push(file));
 
-  console.log(JSON.stringify(allCSVs), name)
 
   const file = `${__dirname}/csv/${name}`
 
@@ -363,6 +360,10 @@ const loadLoaderUI = async () => {
 const generateCSV = async (sessionData) => {
   const csv = new ObjectsToCsv(sessionData)
   const fileName = `data_${Date.now()}.csv`
+  const allCSVs = []
+  fs.readdirSync(`${__dirname}/csv/`).forEach(file => allCSVs.push(file));
+
+  console.log(JSON.stringify(allCSVs), name)
   await csv.toDisk(`${__dirname}/csv/${fileName}`)
   await uploadCsv(fileName);
 }
