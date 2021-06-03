@@ -48,7 +48,7 @@
           isLoading = false;
           const mapped = res.map(item => ({
             file: item.url_private_download,
-            time: item.timestamp,
+            time: parseInt(item.name.split('_')[1]),
             title: item.title,
             size: item.size,
             id: item.id
