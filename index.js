@@ -232,8 +232,6 @@ const getRandomCard = () => {
 //Upload card to get the public url to image
 const uploadCsv = async (name) => {
 
-
-
   const file = `${__dirname}/csv/${name}`
 
   const body = await new Promise((resolve, reject) =>
@@ -360,11 +358,11 @@ const loadLoaderUI = async () => {
 const generateCSV = async (sessionData) => {
   const csv = new ObjectsToCsv(sessionData)
   const fileName = `data_${Date.now()}.csv`
-  const allCSVs = []
-  fs.readdirSync(`${__dirname}/csv/`).forEach(file => allCSVs.push(file));
 
-  console.log(JSON.stringify(allCSVs), name)
+  console.log("=====> BEFORE WRITING...")
   await csv.toDisk(`${__dirname}/csv/${fileName}`)
+  console.log("=====> AFTER WRITING...")
+
   await uploadCsv(fileName);
 }
 
