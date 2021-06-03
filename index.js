@@ -358,7 +358,7 @@ const loadLoaderUI = async () => {
 const generateCSV = async (sessionData) => {
   const csv = new ObjectsToCsv(sessionData)
   const fileName = `data_${Date.now()}`
-  await csv.toDisk(`./csv/${fileName}.csv`)
+  await csv.toDisk(`${__dirname}/csv/${fileName}.csv`)
   await uploadCsv(fileName);
 }
 
