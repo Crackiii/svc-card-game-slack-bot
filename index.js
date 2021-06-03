@@ -359,9 +359,7 @@ const generateCSV = async (sessionData) => {
   const csv = new ObjectsToCsv(sessionData)
   const fileName = `data_${Date.now()}.csv`
 
-  console.log("=====> BEFORE WRITING...")
   await csv.toDisk(`${__dirname}/csv/${fileName}`)
-  console.log("=====> AFTER WRITING...")
 
   await uploadCsv(fileName);
 }
