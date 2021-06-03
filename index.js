@@ -240,7 +240,7 @@ const uploadCsv = async (name) => {
       formData: {
         token: userToken,
         title: "CSV",
-        filename: name,
+        filename: `${name}.csv`,
         filetype: "auto",
         file: fs.createReadStream(file)
       },
